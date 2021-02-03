@@ -2,7 +2,7 @@ CUDA_PATH?=/usr/local/cuda
 HOST_COMPILER=g++
 #cpp17 is not supported yet for gcc host compiler
 CPP_VERSION=-std=c++14 
-NVCC=$(CUDA_PATH)/bin/nvcc $(CPP_VERSION) -ccbin $(HOST_COMPILER)
+NVCC=$(CUDA_PATH)/bin/nvcc -ccbin $(HOST_COMPILER)
 
 NVPROF_FLAGS=--metrics achieved_occupancy,inst_executed,inst_fp_32,inst_fp_64,inst_integer
 
@@ -24,7 +24,7 @@ dbg:
 	$(NVCC) $(NVCCFLAGS_DEBUG) -o main main.o
 
 run: main
-	rm -f render.jpg
+	rm -f out.jpg
 	./main
 
 profile: main
@@ -34,5 +34,5 @@ profile_metrics: main
 	nvprof $(NVPROF_FLAGS) ./main
 
 clean:
-	rm -f main main.o render.jpg
+	rm -f main main.o out.jpg
 
