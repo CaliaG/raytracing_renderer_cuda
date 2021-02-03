@@ -17,6 +17,8 @@
 #define SCENE_BALLS
 //#define SCENE_HDR
 
+void save_to_jpg(vec3* frameBuffer_u);
+
 // remember, the # converts the definition to a char*
 #define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__)
 
@@ -31,9 +33,7 @@ inline void check_cuda(cudaError_t errcode, char const* const func, const char* 
 
 //texture<float, 2, cudaReadModeElementType> tex;
 
-
 __device__ vec3 color(const ray& r, hitable_list** scene, curandState* rstate) {
-
     // this section is a simple implementation for a diffuse material with a 50%
     // attenuation at each bounce
     ray curr_r = r;
@@ -77,20 +77,20 @@ __global__ void init_rand_state(curandState* randState, int width, int height) {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
 
-    // if out of range
+    // -- if out of range
     if ((i >= width) || (j >= height)) {
         return;
     }
 
     int index = utils::XY(i, j);
     
-    // same seed for every thread, very slow
+    // -- same seed for every thread, very slow
     //curand_init(SEED, index, 0, &randState[index]);
 
-    // different seed for each thread, fast
+    // -- different seed for each thread, fast
     curand_init(SEED + index, 0, 0, &randState[index]);
 
-    // produces weird artifacts
+    // -- produces weird artifacts
     //curand_init(SEED, 0, 0, &randState[index]);
 }
 
@@ -101,7 +101,7 @@ __global__ void render(vec3* frameBuffer, int width, int height,
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
 
-    // if out of range
+    // -- if out of range
     if ((i >= width) || (j >= height)) {
         return;
     }
@@ -112,7 +112,7 @@ __global__ void render(vec3* frameBuffer, int width, int height,
     vec3 col;
 
     for (uint16_t sample = 0; sample < SAMPLES_PER_PIXEL; ++sample) {
-        // remember: random value is [0, 1[ 
+        // -- remember: random value is [0, 1]
         float u = float(i + curand_uniform(&rstate)) / float(width);
         float v = float(j + curand_uniform(&rstate)) / float(height);
         ray r = (*cam)->get_ray(u, v, &rstate);
@@ -120,21 +120,20 @@ __global__ void render(vec3* frameBuffer, int width, int height,
         
     }
 
-    
     col /= float(SAMPLES_PER_PIXEL);
-        //col.saturate();
-    // do gamma correction with gamma 2 => raise the color to the power of 1/2 (sqrt)
+    //col.saturate();
+    // -- do gamma correction with gamma 2 => raise the color to the power of 1/2 (sqrt)
     frameBuffer[index] = col.saturate().gamma_correct();
 
-    // only for debug
+    // -- only for debug
     //frameBuffer[index] = col.gamma_correct();
-
 }
 
 #ifdef SCENE_HDR
 constexpr char imagePath[] = "textures/hdr.jpg";
-__global__ void populate_scene_hdr(hitable_object** objects, hitable_list** scene,
-    camera** cam, curandState* state, float* textureBuffer) {
+__global__ void populate_scene_hdr(hitable_object** objects, hitable_list** scene, 
+                                    camera** cam, curandState* state, float* textureBuffer
+) {
     if (threadIdx.x == 0 && blockIdx.x == 0) {
         objects[0] = new sphere(
             vec3(1., 0, -1),
@@ -186,7 +185,8 @@ __global__ void populate_scene_hdr(hitable_object** objects, hitable_list** scen
 #ifdef SCENE_BALLS
 constexpr char imagePath[] = "textures/earth.jpg";
 __global__ void populate_scene_balls(hitable_object** objects, hitable_list** scene,
-    camera** cam, curandState* state, float* textureBuffer) {
+                                      camera** cam, curandState* state, float* textureBuffer
+) {
     if (threadIdx.x == 0 && blockIdx.x == 0) { // only call once
         // sphere 1
         objects[0] = new sphere(
@@ -196,14 +196,9 @@ __global__ void populate_scene_balls(hitable_object** objects, hitable_list** sc
             //new dielectric(1.3, vec3(1, 1, 1))
             //new dielectric(1.5, vec3(1,1,1))
         );
-
         objects[0]->set_id(0);
         
-        
-
-        // sphere 2
-
-
+        // -- sphere 2
         /*text* checker = new checker_texture(
             new constant_texture(vec3(0.1, 0.2, 0.5)),
             new constant_texture(vec3(0.5, 0.2, 0.1)));*/
@@ -233,9 +228,8 @@ __global__ void populate_scene_balls(hitable_object** objects, hitable_list** sc
         );
         objects[1]->set_id(1);*/
 
-
         text* im_text = new image_texture(textureBuffer, WIDTH, HEIGHT);
-        //sphere 3
+        // -- sphere 3
         objects[2] = new sphere(
             vec3(1, 0, -1),
             0.5,
@@ -249,31 +243,22 @@ __global__ void populate_scene_balls(hitable_object** objects, hitable_list** sc
         true);
         objects[2]->set_id(2);
 
-        //sphere 4
-
+        // -- sphere 4
         //perlin_noise::init(state);
         //perlin_noise noise;
         //text* per_text = new noise_texture(state);
 
-        objects[3] = new sphere(
-            vec3(-1, 0, -2),
-            0.5,
-
+        objects[3] = new sphere( vec3(-1, 0, -2), 0.5,
             //new lambertian(per_text)
             new metal(vec3(1.f), 0.f)
-//            new lambertian(new constant_texture(vec3(0.6, 0.1, 0.1)))
+            //new lambertian(new constant_texture(vec3(0.6, 0.1, 0.1)))
             //new dielectric(1.5, vec3(1, 1, 1))
             //new metal(vec3(0.8, 0.8, 0.8), 0.5)
         );
         objects[3]->set_id(3);
 
-        //sphere 5
-        objects[4] = new sphere(
-            vec3(0, 0, -2),
-            0.5,
-            new metal(vec3(0.8, 0.8, 0.8), 0.5)
-            //new metal(vec3(0.8, 0.8, 0.8), 0.5)
-        );
+        // -- sphere 5
+        objects[4] = new sphere(vec3(0, 0, -2), 0.5, new metal(vec3(0.8, 0.8, 0.8), 0.5));
         objects[4]->set_id(4);
         
         objects[5] = new sphere(
@@ -356,7 +341,6 @@ __global__ void populate_scene_balls(hitable_object** objects, hitable_list** sc
 }
 #endif
 
-
 __global__ void free_scene(hitable_object** objects, hitable_list** scene, camera** cam) {
     // Objects already destoryed inside scene
     //delete* (objects);
@@ -366,7 +350,6 @@ __global__ void free_scene(hitable_object** objects, hitable_list** scene, camer
 }
 
 int main(int argc, char** argv) {
-
     // loading image to host
     
     // load image as uint8_t
@@ -420,15 +403,16 @@ int main(int argc, char** argv) {
 
     // remember, construction is done in 1 block, 1 thread
 #ifdef SCENE_BALLS
-    populate_scene_balls<<<1, 1>>> (hitableObjects_d, scene_d, camera_d, rand_state_d, imgData_d);
+    populate_scene_balls<<<1, 1>>>(hitableObjects_d, scene_d, camera_d, rand_state_d, imgData_d);
 #endif
 #ifdef SCENE_HDR
-    populate_scene_hdr <<<1, 1 >>> (hitableObjects_d, scene_d, camera_d, rand_state_d, imgData_d);
+    populate_scene_hdr<<<1, 1>>>(hitableObjects_d, scene_d, camera_d, rand_state_d, imgData_d);
 #endif
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
-    auto start = std::chrono::system_clock::now();
+    clock_t start, stop;
+    start = clock();
     
     // remember: always round with + 1
     dim3 blocks(WIDTH / THREAD_SIZE_X + 1, HEIGHT / THREAD_SIZE_Y + 1);
@@ -448,14 +432,13 @@ int main(int argc, char** argv) {
     // block host until all device threads finish
     checkCudaErrors(cudaDeviceSynchronize());
 
-    auto end = std::chrono::system_clock::now();
-
-    auto timer_seconds = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-    std::cout <<  "took " << timer_seconds << "us.\n";
+    stop = clock();
+    double timer_seconds = ((double)(stop - start)) / CLOCKS_PER_SEC;
+    std::cout << "took " << timer_seconds << " seconds.\n";
 
     // Output frame buffer as a ppm image
 #if 0
-    std::ofstream ppm_image("render.ppm");
+    std::ofstream ppm_image("out.ppm");
     ppm_image << "P3\n" << WIDTH << " " << HEIGHT << "\n255\n";
     for (int j = HEIGHT - 1; j >= 0; j--) {
         for (int i = 0; i < WIDTH; i++) {
@@ -472,24 +455,7 @@ int main(int argc, char** argv) {
     ppm_image.close();
 #endif
 
-    uint8_t* imgBuff = (uint8_t*)std::malloc(WIDTH * HEIGHT * 3 * sizeof(uint8_t));
-    for (int j = HEIGHT - 1; j >= 0; --j) {
-        for (int i = 0; i < WIDTH; ++i) {
-            size_t index = utils::XY(i, j);
-            // stbi generates a Y flipped image
-            size_t rev_index = utils::XY(i, HEIGHT - j - 1);
-            float r = frameBuffer_u[index].r();
-            float g = frameBuffer_u[index].g();
-            float b = frameBuffer_u[index].b();
-            imgBuff[rev_index * 3 + 0] = int(255.999f * r) & 255;
-            imgBuff[rev_index * 3 + 1] = int(255.999f * g) & 255;
-            imgBuff[rev_index * 3 + 2] = int(255.999f * b) & 255;
-        }
-    }
-
-    //stbi_write_png("render.png", WIDTH, HEIGHT, 3, imgBuff, WIDTH * 3);
-    stbi_write_jpg("render.jpg", WIDTH, HEIGHT, 3, imgBuff, 100);
-    std::free(imgBuff);
+    save_to_jpg(frameBuffer_u);
 
     // clean everything
     checkCudaErrors(cudaDeviceSynchronize());
@@ -509,4 +475,24 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaDeviceReset());
 
     return 0;
+}
+
+void save_to_jpg(vec3* frameBuffer_u) {
+    uint8_t* imgBuff = (uint8_t*)std::malloc(WIDTH * HEIGHT * 3 * sizeof(uint8_t));
+    for (int j = HEIGHT - 1; j >= 0; --j) {
+        for (int i = 0; i < WIDTH; ++i) {
+            size_t index = utils::XY(i, j);
+            // stbi generates a Y flipped image
+            size_t rev_index = utils::XY(i, HEIGHT - j - 1);
+            float r = frameBuffer_u[index].r();
+            float g = frameBuffer_u[index].g();
+            float b = frameBuffer_u[index].b();
+            imgBuff[rev_index * 3 + 0] = int(255.999f * r) & 255;
+            imgBuff[rev_index * 3 + 1] = int(255.999f * g) & 255;
+            imgBuff[rev_index * 3 + 2] = int(255.999f * b) & 255;
+        }
+    }
+    //stbi_write_png("out.png", WIDTH, HEIGHT, 3, imgBuff, WIDTH * 3);
+    stbi_write_jpg("out.jpg", WIDTH, HEIGHT, 3, imgBuff, 100);
+    std::free(imgBuff);
 }
