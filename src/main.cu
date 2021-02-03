@@ -18,6 +18,7 @@
 //#define SCENE_HDR
 
 void save_to_jpg(vec3* frameBuffer_u);
+void save_to_ppm(vec3* frameBuffer_u);
 
 // remember, the # converts the definition to a char*
 #define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__)
@@ -228,7 +229,7 @@ __global__ void populate_scene_balls(hitable_object** objects, hitable_list** sc
         );
         objects[1]->set_id(1);*/
 
-        text* im_text = new image_texture(textureBuffer, WIDTH, HEIGHT);
+        text* im_text = new image_texture(textureBuffer, 1200, 600);
         // -- sphere 3
         objects[2] = new sphere(
             vec3(1, 0, -1),
@@ -423,10 +424,7 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
-    render<<<blocks, threads>>>(frameBuffer_u, WIDTH, HEIGHT,
-        scene_d,
-        camera_d,
-        rand_state_d);
+    render<<<blocks, threads>>>(frameBuffer_u, WIDTH, HEIGHT, scene_d, camera_d, rand_state_d);
 
     checkCudaErrors(cudaGetLastError());
     // block host until all device threads finish
@@ -436,26 +434,10 @@ int main(int argc, char** argv) {
     double timer_seconds = ((double)(stop - start)) / CLOCKS_PER_SEC;
     std::cout << "took " << timer_seconds << " seconds.\n";
 
-    // Output frame buffer as a ppm image
-#if 0
-    std::ofstream ppm_image("out.ppm");
-    ppm_image << "P3\n" << WIDTH << " " << HEIGHT << "\n255\n";
-    for (int j = HEIGHT - 1; j >= 0; j--) {
-        for (int i = 0; i < WIDTH; i++) {
-            size_t index = utils::XY(i, j);
-            float r = frameBuffer_u[index].r();
-            float g = frameBuffer_u[index].g();
-            float b = frameBuffer_u[index].b();
-            int ir = int(255.99 * r);
-            int ig = int(255.99 * g);
-            int ib = int(255.99 * b);
-            ppm_image << ir << " " << ig << " " << ib << "\n";
-        }
-    }
-    ppm_image.close();
-#endif
-
+    // -- Output frame buffer as a jpg image
     save_to_jpg(frameBuffer_u);
+    // -- Output frame buffer as a ppm image
+    save_to_ppm(frameBuffer_u);
 
     // clean everything
     checkCudaErrors(cudaDeviceSynchronize());
@@ -495,4 +477,22 @@ void save_to_jpg(vec3* frameBuffer_u) {
     //stbi_write_png("out.png", WIDTH, HEIGHT, 3, imgBuff, WIDTH * 3);
     stbi_write_jpg("out.jpg", WIDTH, HEIGHT, 3, imgBuff, 100);
     std::free(imgBuff);
+}
+
+void save_to_ppm(vec3* frameBuffer_u) {
+    std::ofstream ppm_image("out.ppm");
+    ppm_image << "P3\n" << WIDTH << " " << HEIGHT << "\n255\n";
+    for (int j = HEIGHT - 1; j >= 0; j--) {
+        for (int i = 0; i < WIDTH; i++) {
+            size_t index = utils::XY(i, j);
+            float r = frameBuffer_u[index].r();
+            float g = frameBuffer_u[index].g();
+            float b = frameBuffer_u[index].b();
+            int ir = int(255.99 * r);
+            int ig = int(255.99 * g);
+            int ib = int(255.99 * b);
+            ppm_image << ir << " " << ig << " " << ib << "\n";
+        }
+    }
+    ppm_image.close();
 }
