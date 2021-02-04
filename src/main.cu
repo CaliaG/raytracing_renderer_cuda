@@ -6,6 +6,7 @@
 #include "camera.h"
 #include "bvh.h"
 #include "texture.h"
+#include "transform.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "libs/stb/stb_image.h"
@@ -231,17 +232,21 @@ __global__ void populate_scene_balls(hitable_object** objects, hitable_list** sc
 
         text* im_text = new image_texture(textureBuffer, 1200, 600);
         // -- sphere 3
-        objects[2] = new sphere(
-            vec3(1, 0, -1),
-            0.5,
-            //new dielectric(1.5)
-            //new lambertian(noise1)
-            //new lambertian(new constant_texture(vec3(0.1, 0.2, 0.5)))
-            new emitter(im_text,2),
-            //new metal(vec3(1.f), 0.f)
-            //new metal(vec3(1.f), 0.f)
-            //new metal(vec3(0.075, 0.461, 0.559), 0.1f)
-        true);
+        sphere* earth = new sphere(vec3(0,0,0), 0.5, new emitter(im_text,2), true);
+        vec3 translate = vec3(1, 0, -1.5);
+        float rotate = 90.f;
+        objects[2] = new Translate(new Rotate(earth, rotate), translate);
+        // objects[2] = new sphere(
+        //     vec3(1, 0, -1),
+        //     0.5,
+        //     //new dielectric(1.5)
+        //     //new lambertian(noise1)
+        //     //new lambertian(new constant_texture(vec3(0.1, 0.2, 0.5)))
+        //     new emitter(im_text,2),
+        //     //new metal(vec3(1.f), 0.f)
+        //     //new metal(vec3(1.f), 0.f)
+        //     //new metal(vec3(0.075, 0.461, 0.559), 0.1f)
+        // true);
         objects[2]->set_id(2);
 
         // -- sphere 4
