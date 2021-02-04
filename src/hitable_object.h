@@ -7,6 +7,7 @@ class material;
 
 enum class hit_object_type {
     SPHERE,
+    TRIANGLE,
     UNKNOWN
 };
 
@@ -14,6 +15,7 @@ enum class hit_object_type {
 enum class object_type {
     SPHERE,
     MOVING_SPHERE,
+    TRIANGLE,
     HITABLE_LIST,
     BOUNDING_VOLUME_HIERARCHY,
     UNKNOWN
@@ -89,6 +91,8 @@ hitable_object::obj_type_str(object_type obj) {
         return "SPHERE";
     case object_type::MOVING_SPHERE:
         return "MOVING_SPHERE";
+    case object_type::TRIANGLE:
+        return "TRIANGLE";
     case object_type::HITABLE_LIST:
         return "HITABLE_LIST";
     case object_type::BOUNDING_VOLUME_HIERARCHY:
