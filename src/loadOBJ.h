@@ -1,7 +1,8 @@
 #pragma once
 
 #include "material.h"
-#include "hittable_object.h"
+#include "hitable_object.h"
+#include "triangle.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION // define this in only *one* .cc
 #include "libs/tiny_obj_loader.h"
@@ -22,7 +23,7 @@ struct objData
 };
 
 __global__
-void create_obj_hittables(hitable_object* hittables, material* material, objData obj, int start_id, float scale) {
+void create_obj_hittables(hitable_object* hittables/*, material* material*/, objData obj, int start_id, float scale) {
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
 	if (idx >= obj.num_triangles) return;
@@ -49,11 +50,13 @@ void create_obj_hittables(hitable_object* hittables, material* material, objData
 		triangle_points[v*3 + 2] = obj.vertices[3*idx.vertex_index+2] * scale;
 	}
 
-	hittables[start_id + idx] = Hittable::triangle(
-			vec3(triangle_points[0], triangle_points[1], triangle_points[2]),
-			vec3(triangle_points[3], triangle_points[4], triangle_points[5]),
-			vec3(triangle_points[6], triangle_points[7], triangle_points[8]),
-			material);
+	hittables[start_id + idx] = triangle(
+		vec3(triangle_points[0], triangle_points[1], triangle_points[2]),
+		vec3(triangle_points[3], triangle_points[4], triangle_points[5]),
+		vec3(triangle_points[6], triangle_points[7], triangle_points[8]),
+		new metal(vec3(1,1,1), 1.5));
+		//material);
+    hittables[start_id + idx].set_id(start_id + idx);
 }
 
 objData load_obj(const char* obj_file) {

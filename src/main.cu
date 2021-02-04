@@ -7,6 +7,7 @@
 #include "bvh.h"
 #include "texture.h"
 #include "transform.h"
+#include "loadOBJ.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "libs/stb/stb_image.h"
@@ -15,7 +16,7 @@
 
 #define SAMPLES_PER_PIXEL 100
 
-#define SCENE_BALLS
+//#define SCENE_BALLS
 //#define SCENE_HDR
 
 void save_to_jpg(vec3* frameBuffer_u);
@@ -131,6 +132,153 @@ __global__ void render(vec3* frameBuffer, int width, int height,
     //frameBuffer[index] = col.gamma_correct();
 }
 
+__global__ void populate_scene_mesh2(hitable_object** objects, hitable_list** scene,
+                                      camera** cam, curandState* state, float* textureBuffer, int num_hittables
+) {
+    if (threadIdx.x == 0 && blockIdx.x == 0) { // only call once
+        // sphere 1
+        // objects[0] = new sphere(
+        //     vec3(0, 0, -1),
+        //     0.5,
+        //     new lambertian(new constant_texture(vec3(0.6, 0.1, 0.1)))
+        // );
+        // objects[0]->set_id(0);
+        
+        *scene = new hitable_list(objects, static_cast<bvh_node*>(objects[num_hittables]), num_hittables);
+        scene[0]->set_id(++num_hittables);
+
+        vec3 lookfrom = vec3(-.253,1.731,7.573);
+        vec3 lookat = vec3(-.253,1.119,.281);
+        float dist_to_focus = 7.317;
+        float aperture = .1f;
+        float fov = 20.f;
+        *cam = new camera(
+            lookfrom, // lookfrom
+            lookat, // lookat
+            vec3(0,1,0),   // up
+            fov,           // fov
+            float(WIDTH) / float(HEIGHT),
+            aperture,
+            dist_to_focus,
+            0,
+            0.2
+        );
+    }
+}
+
+__global__ void populate_scene_mesh(hitable_object** objects, hitable_list** scene,
+                                      camera** cam, curandState* state, float* textureBuffer, float scale
+) {
+    if (threadIdx.x == 0 && blockIdx.x == 0) { // only call once
+
+        objData obj = load_obj("/content/raytracing_renderer_cuda/models/bunny.obj");
+        int num_hittables = obj.num_triangles;
+
+        // Triangles
+        for (int idx = 0; idx < obj.num_shapes; idx++) {
+            int tri_count = 0;
+            int tri_id = 0;
+            int shape_id = 0;
+            for (int s = 0; s < obj.num_shapes; s++) {
+                if (idx < tri_count + obj.shapes[s].size) {
+                    tri_id = idx - tri_count;
+                    shape_id = s;
+                    break;
+                }
+                tri_count += obj.shapes[s].size;
+            }
+
+            float triangle_points[9];
+            for (int v = 0; v < 3; v++) {
+                tinyobj::index_t idx = obj.shapes[shape_id].indices[tri_id*3 + v];
+                triangle_points[v*3 + 0] = obj.vertices[3*idx.vertex_index+0] * scale;
+                triangle_points[v*3 + 1] = obj.vertices[3*idx.vertex_index+1] * scale;
+                triangle_points[v*3 + 2] = obj.vertices[3*idx.vertex_index+2] * scale;
+            }
+    
+            objects[idx] = new triangle(
+                vec3(triangle_points[0], triangle_points[1], triangle_points[2]),
+                vec3(triangle_points[3], triangle_points[4], triangle_points[5]),
+                vec3(triangle_points[6], triangle_points[7], triangle_points[8]),
+                new metal(vec3(1,1,1), 1.5));
+                //material);
+                objects[idx]->set_id(idx);
+        }
+
+        *scene = new hitable_list(objects, static_cast<bvh_node*>(objects[num_hittables]), num_hittables);
+        num_hittables++;
+        scene[0]->set_id(num_hittables);
+
+        vec3 lookfrom = vec3(-.253,1.731,7.573);
+        vec3 lookat = vec3(-.253,1.119,.281);
+        float dist_to_focus = 7.317;
+        float aperture = .1f;
+        float fov = 20.f;
+        *cam = new camera(
+            lookfrom, // lookfrom
+            lookat, // lookat
+            vec3(0,1,0),   // up
+            fov,           // fov
+            float(WIDTH) / float(HEIGHT),
+            aperture,
+            dist_to_focus,
+            0,
+            0.2
+        );
+    }
+}
+
+// void createScene(hitable_object** hittables, hitable_list** scene, camera** cam, curandState* state, float* textureBuffer) {
+//     objData obj = load_obj("/content/raytracing_renderer_cuda/models/bunny.obj");
+// 	int num_hittables = obj.num_triangles;
+
+//     checkCudaErrors(cudaMalloc((void**)&hittables, num_hittables * sizeof(hitable_object*)));
+
+//     populate_scene_mesh<<<1,1>>>(hittables, scene, cam, state, textureBuffer, num_hittables, obj, 1.f);
+//     checkCudaErrors(cudaGetLastError());
+//     checkCudaErrors(cudaDeviceSynchronize());
+// }
+
+void createScene2(hitable_list** scene, camera** cam, curandState* state, float* textureBuffer) {
+    objData obj = load_obj("/content/raytracing_renderer_cuda/models/bunny.obj");
+    objData obj2 = load_obj("/content/raytracing_renderer_cuda/models/skull.obj");
+	// int num_hittables = obj.num_triangles + num_manually_defined_hittables;
+	int num_hittables = obj.num_triangles + obj2.num_triangles;
+	hitable_object* hittables;
+
+	cudaMalloc(&(hittables), num_hittables * sizeof(hitable_object));
+
+	// material* mat;
+	// cudaMalloc(&(mat), sizeof(material));
+	// //create_metal<<<1, 1>>>(material, vec3(.1, .3, .5), .5);
+	// //create_metal<<<1, 1>>>(material, rand_state);
+	// //create_lambertian<<<1, 1>>>(material, vec3(.5, .1, .45));
+	// create_dielectric<<<1, 1>>>(mat, 1.5f);
+
+	// material* mat2;
+	// cudaMalloc(&(mat2), sizeof(material));
+	// create_metal<<<1, 1>>>(mat2, vec3(.1, .3, .5), .5);
+
+    // cudaMalloc((tinyobj::index_t**)&shape.indices, shapes[i].mesh.indices.size() * sizeof(tinyobj::index_t));
+    // cudaMemcpy(shape.indices, &(shapes[i].mesh.indices[0]), shapes[i].mesh.indices.size() * sizeof(tinyobj::index_t), cudaMemcpyHostToDevice);
+
+	int obj_threads = 512;
+	int obj_dims = (obj.num_triangles + obj_threads - 1) / obj_threads;
+	//create_obj_hittables<<<obj_dims, obj_threads>>>(scene.hittables, material, obj, 0, 0.8f);
+	create_obj_hittables<<<obj_dims, obj_threads>>>(hittables/*, material*/, obj, 0, 0.8f);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
+
+	obj_dims = (obj2.num_triangles + obj_threads - 1) / obj_threads;
+    create_obj_hittables<<<obj_dims, obj_threads>>>(hittables/*, material2*/, obj2, obj.num_triangles, 0.5f);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
+    
+    populate_scene_mesh2<<<1,1>>>(&hittables, scene, cam, state, textureBuffer, num_hittables);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
+}
+
 #ifdef SCENE_HDR
 constexpr char imagePath[] = "textures/hdr.jpg";
 __global__ void populate_scene_hdr(hitable_object** objects, hitable_list** scene, 
@@ -182,41 +330,6 @@ __global__ void populate_scene_hdr(hitable_object** objects, hitable_list** scen
     }
 }
 #endif
-
-__global__
-void create_obj_hittables(itable_object** objects, hitable_list** scene, Material* material, objData obj, int start_id, float scale) {
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-	if (idx >= obj.num_triangles) return;
-
-	// Identify triangle ID
-	int tri_count = 0;
-	int tri_id = 0;
-	int shape_id = 0;
-	for (int s = 0; s < obj.num_shapes; s++) {
-		if (idx < tri_count + obj.shapes[s].size) {
-			tri_id = idx - tri_count;
-			shape_id = s;
-			break;
-		}
-		tri_count += obj.shapes[s].size;
-	}
-
-	// Triangles
-	float triangle_points[9];
-	for (int v = 0; v < 3; v++) {
-		tinyobj::index_t idx = obj.shapes[shape_id].indices[tri_id*3 + v];
-		triangle_points[v*3 + 0] = obj.vertices[3*idx.vertex_index+0] * scale;
-		triangle_points[v*3 + 1] = obj.vertices[3*idx.vertex_index+1] * scale;
-		triangle_points[v*3 + 2] = obj.vertices[3*idx.vertex_index+2] * scale;
-	}
-
-	hittables[start_id + idx] = Hittable::triangle(
-			vec3(triangle_points[0], triangle_points[1], triangle_points[2]),
-			vec3(triangle_points[3], triangle_points[4], triangle_points[5]),
-			vec3(triangle_points[6], triangle_points[7], triangle_points[8]),
-			material);
-}
 
 // TODO: check for array boundary
 #ifdef SCENE_BALLS
@@ -401,6 +514,7 @@ int main(int argc, char** argv) {
     int w, h, ch;
     stbi_ldr_to_hdr_scale(1.0f);
     stbi_ldr_to_hdr_gamma(1.0f);
+    constexpr char imagePath[] = "textures/earth.jpg";
     float* imgData_h = stbi_loadf(imagePath, &w, &h, &ch, 0);
     std::cout << "Loaded image with " << w << "x" << h << " and " << ch << " channels\n";
 
@@ -445,10 +559,17 @@ int main(int argc, char** argv) {
     // remember, construction is done in 1 block, 1 thread
 #ifdef SCENE_BALLS
     populate_scene_balls<<<1, 1>>>(hitableObjects_d, scene_d, camera_d, rand_state_d, imgData_d);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
 #endif
 #ifdef SCENE_HDR
     populate_scene_hdr<<<1, 1>>>(hitableObjects_d, scene_d, camera_d, rand_state_d, imgData_d);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
 #endif
+
+    checkCudaErrors(cudaMalloc((void**)&hitableObjects_d, 144000 * sizeof(hitable_object*)));
+    populate_scene_mesh<<<1, 1>>>(hitableObjects_d, scene_d, camera_d, rand_state_d, imgData_d, 0.5f);
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
@@ -464,11 +585,10 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
-    render<<<blocks, threads>>>(frameBuffer_u, WIDTH, HEIGHT, scene_d, camera_d, rand_state_d);
-
-    checkCudaErrors(cudaGetLastError());
-    // block host until all device threads finish
-    checkCudaErrors(cudaDeviceSynchronize());
+    // render<<<blocks, threads>>>(frameBuffer_u, WIDTH, HEIGHT, scene_d, camera_d, rand_state_d);
+    // checkCudaErrors(cudaGetLastError());
+    // // block host until all device threads finish
+    // checkCudaErrors(cudaDeviceSynchronize());
 
     stop = clock();
     double timer_seconds = ((double)(stop - start)) / CLOCKS_PER_SEC;
