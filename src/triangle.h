@@ -8,7 +8,7 @@ public:
     __device__ triangle() {};
     __device__ triangle(vec3 _a, vec3 _b, vec3 _c, const material* mat)
         : A(_a), B(_b), C(_c), _m(mat) {
-            normal = unit_vector(cross(B - A, C - A));
+            normal = vec3::normalize(vec3::cross(B - A, C - A));
         };
 
     __device__ virtual bool hit(const ray& r, float tmin, float tmax, hit_record& hrec) override;
@@ -29,45 +29,45 @@ private:
 };
 
 __device__ 
-bool triangle::hit(const ray& r, float tmin, float tmax, hit_record& hrec) {
+bool triangle::hit(const ray& r, float t_min, float t_max, hit_record& rec) {
     const float EPSILON = .0000001f;
 	vec3 edge1, edge2, h, s, q;
 	float a, f, u, v;
 
 	edge1 = B - A;
 	edge2 = C - A;
-	h = cross(r.direction, edge2);
-	a = dot(edge1, h);
+	h = vec3::cross(r.direction(), edge2);
+	a = vec3::dot(edge1, h);
 
 	if (a > -EPSILON && a < EPSILON)
 		return false;  // Parallel to the triangle
 
 	f = 1.0 / a;
-	s = r.origin - A;
-	u = f * dot(s, h);
+	s = r.origin() - A;
+	u = f * vec3::dot(s, h);
 
 	if (u < 0.0 || u > 1.0)
 		return false;
 
-	q = cross(s, edge1);
-	v = f * dot(r.direction, q);
+	q = vec3::cross(s, edge1);
+	v = f * vec3::dot(r.direction(), q);
 
 	if (v < 0.0 || u + v > 1.0)
 		return false;
 
-	float t = f * dot(edge2, q);
+	float t = f * vec3::dot(edge2, q);
 
 	if (t > t_min && t < t_max) {
-		rec.t = t;
-		rec.p = r.point_at_parameter(t);
-		rec.normal = normal;
+		rec.set_t(t);
+		rec.set_p(r.point_at_parameter(t));
+		rec.set_n(normal);
 		return true;
 	} else
 		return false;
 }
 
 __device__
-bool sphere::bounding_box(float t0, float t1, AABB& box) const {
+bool triangle::bounding_box(float t0, float t1, AABB& box) const {
     float sx = A.x() < B.x() ? A.x() : B.x();
     sx = C.x() < sx ? C.x() : sx;
     float sy = A.y() < B.y() ? A.y() : B.y();
